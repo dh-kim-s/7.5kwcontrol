@@ -12,15 +12,16 @@ const int hydrogen_drain_valve = 29;
 const int oxygen_compressor    = 30;
 const int oxygen_drain_valve   = 31;
 
-const float water_height_limit = 100.0;       // 수위 임계값
-const unsigned long drain_duration = 5000;    // 드레인 지속 시간 (ms)
+unsigned long ox_drain_time = 0;
+bool ox_start_drain = true;
 
-unsigned long drain_start_time = 0;
-bool is_draining = false;
-bool prev_drain_sig = false;
+unsigned long hy_drain_time = 0;
+bool hy_start_drain = true;
 
 // === Setup ===
 void setup() {
+  waitForStart();
+  
   pinMode(coolant_pump1, OUTPUT);
   pinMode(coolant_pump2, OUTPUT);
   pinMode(coolant_heater, OUTPUT);
@@ -33,6 +34,7 @@ void setup() {
   pinMode(oxygen_compressor, OUTPUT);
   pinMode(oxygen_drain_valve, OUTPUT);
 
+  
   initialize_mode();
 }
 
@@ -50,23 +52,43 @@ void loop() {
     coolant_loop1();
   }
 
-  // 수위 센서 처리 (예: 아날로그 A1)
-  float water_height = analogRead(A1);
-  bool drain_sig = water_height > water_height_limit;
-
-  if (drain_sig != prev_drain_sig) {
-    solenoid_drain(drain_sig);
-    prev_drain_sig = drain_sig;
+  // 180초에 10초씩 밸브
+  if (millis() - ox_drain_time >= 180000) {
+    if (ox_start_drain) {
+      oxygen_solenoid_drain_On();
+      ox_start_drain = false;
+    if (millis() - ox_drain_time > 190000) {  
+      oxygen_solenoid_drain_Off();
+    }
   }
 
-  // 드레인 시간 만료 시 밸브 닫기
-  if (is_draining && millis() - drain_start_time >= drain_duration) {
-    digitalWrite(oxygen_drain_valve, LOW);
-    is_draining = false;
+  if (millis() - hy_drain_time >= 60000) {
+    if (hy_start_drain) {
+      hydrogen_solenoid_drain_On();
+      hy_start_drain = false;
+    if (millis() - hy_drain_time > 63000) {  
+      hydrogen_solenoid_drain_Off();
+    }
   }
 
-  delay(1000);
+  delay(500);
 }
+
+void waitForStart() {
+  Serial.println("If you want to start, please press 'S'!!");
+  while (!systemStarted) {
+    if (Serial.available()) {
+      char command = Serial.read();
+      if (command == 'S' || command == 's') {
+        systemStarted = true;
+        Serial.println("Start!");
+      }
+    }
+    delay(100);
+  }
+}
+
+        
 
 // === Initialization ===
 void initialize_mode() {
@@ -118,10 +140,27 @@ void oxygen_off() {
 }
 
 // === Drain Control ===
-void solenoid_drain(bool sig) {
-  if (sig) {
-    digitalWrite(oxygen_drain_valve, HIGH);
-    drain_start_time = millis();
-    is_draining = true;
+void oxygen_solenoid_drain_On() {
+  digitalWrite(oxygen_drain_valve, HIGH);
+  }
+}
+  
+void oxygen_solenoid_drain_Off() {
+  digitalWrite(oxygen_drain_valve, LOW);
+  ox_drain_time = millis();
+  ox_start_drain = true;
+  }
+}
+
+
+void hydrogen_solenoid_drain_On() {
+  digitalWrite(hydrogen_drain_valve, HIGH);
+  }
+}
+  
+void hydrogen_solenoid_drain_Off() {
+  digitalWrite(hydrogen_drain_valve, LOW);
+  hy_drain_time = millis();
+  hy_start_drain = true;
   }
 }
